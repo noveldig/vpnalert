@@ -4,10 +4,10 @@ import { Resend } from 'resend';
 // 从 GitHub Actions 环境变量读取密钥
 const apiKey = process.env.RESEND_API_KEY;
 
-// 🔑 环境变量诊断打印
 console.log('--- 🔑 环境变量诊断 ---');
 if (!apiKey) {
   console.error('❌ 结果: RESEND_API_KEY 环境变量未定义！请在 GitHub Secrets 中配置。');
+  process.exit(1);
 } else {
   const maskedKey = apiKey.length > 8 
     ? `${apiKey.substring(0, 5)}***${apiKey.substring(apiKey.length - 4)}` 
@@ -18,31 +18,31 @@ if (!apiKey) {
 }
 console.log('----------------------\n');
 
-if (!apiKey) {
-  process.exit(1);
-}
-
 const resend = new Resend(apiKey);
+
+// 配置带有浏览器伪装的 RSS 解析器，防止被 403 拦截
 const parser = new Parser({
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7'
   },
-  timeout: 12000 // 针对部分网络较慢的源设置 12 秒超时限制
+  timeout: 15000 // 针对国外源延长至 15 秒超时 limit
 });
 
-// 🌐 全网 8 大 iOS 限免/折扣 RSS 监控源列表
+// 🌐 修复且高可靠的 8 大 iOS 限免/折扣 RSS 监控源列表
 const RSS_SOURCES = [
   // 1. 国际主流限免/折扣社区
   { name: 'Reddit r/AppHookup', url: 'https://www.reddit.com/r/AppHookup/.rss' },
-  { name: 'AppSlice iOS Deals', url: 'https://appslice.co/feed' },
-  { name: 'AppShopper Feed (RSSHub)', url: 'https://rsshub.app/appstore/price-drop/us/ios' },
-  { name: 'TouchArcade Sales', url: 'https://toucharcade.com/category/deals/feed/' },
+  { name: 'AppSlice Free Feed', url: 'https://appslice.co/feed/free' },
   { name: 'iDownloadBlog Deals', url: 'https://www.idownloadblog.com/category/deals/feed/' },
+  { name: 'MacRumors iOS Deals', url: 'https://www.macrumors.com/cat/ios-apps/feed/' },
   
   // 2. 国内权威科技与限免社区
+  { name: '小众软件 (最新 Feed)', url: 'https://www.appinn.com/feed/' },
+  { name: '异次元软件世界', url: 'https://feed.iplaysoft.com/' },
   { name: '少数派 综合频道', url: 'https://sspai.com/feed' },
-  { name: '小众软件', url: 'https://feeds.appinn.com/appinn/' },
-  { name: 'V2EX iOS 板块', url: 'https://www.v2ex.com/feed/tab/ios.xml' }
+  { name: '威锋网 - Apple 资讯', url: 'https://www.feng.com/rss.xml' }
 ];
 
 async function fetchAllVPNDeals() {
@@ -64,7 +64,7 @@ async function fetchAllVPNDeals() {
         
         const isWithin3Days = pubDate >= threeDaysAgo;
         
-        // 扩展针对 VPN、网络代理、加密协议及限免相关的关键词
+        // 针对 VPN、网络代理、加密协议及限免相关的关键词匹配
         const isVPNRelated = 
           title.includes('vpn') || 
           title.includes('proxy') || 
@@ -88,11 +88,11 @@ async function fetchAllVPNDeals() {
       console.log(`   └─ 找到 ${matchedItems.length} 条相关线索`);
       allDeals.push(...matchedItems);
     } catch (err) {
-      console.warn(`⚠️ 抓取源 [${source.name}] 失败或超时: ${err.message}`);
+      console.warn(`⚠️ 抓取源 [${source.name}] 失败: ${err.message}`);
     }
   }
 
-  // 根据标题和链接去重
+  // 根据标题去重
   const uniqueDeals = [];
   const seenTitles = new Set();
 
@@ -135,7 +135,7 @@ function buildHtmlBody(deals) {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
       <h2 style="color: #333; border-bottom: 2px solid #0070f3; padding-bottom: 8px;">📱 iOS App Store 限免/优惠 VPN 全网日报</h2>
-      <p style="color: #666; font-size: 14px;">报告日期：${dateStr} (涵盖 Reddit, AppSlice, 少数派, AppShopper 等 8 个全网渠道)</p>
+      <p style="color: #666; font-size: 14px;">报告日期：${dateStr} (涵盖 Reddit, AppSlice, 异次元, 小众软件等 8 个全网渠道)</p>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
       ${dealsHtml}
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
