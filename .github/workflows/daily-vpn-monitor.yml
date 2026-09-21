@@ -2,8 +2,8 @@ name: Daily iOS VPN Monitor & Resend Email
 
 on:
   schedule:
-    - cron: '0 1 * * *'  # 北京时间每天上午 9:00 (UTC 1:00) 自动触发
-  workflow_dispatch:      # 允许在 GitHub 控制台手动一键运行
+    - cron: '0 1 * * *'  # 北京时间每天 9:00
+  workflow_dispatch:      # 允许手动触发
 
 jobs:
   run-monitor:
@@ -16,11 +16,10 @@ jobs:
       - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '22'  # 升级至最新的 LTS 版本，解决 Node 20 弃用警告
 
       - name: Install Dependencies
-        run: npm ci || npm install
+        run: npm install      # 使用 npm install（即使没有 lock 文件也会自动安装）
 
       - name: Run Script & Send Email via Resend
         env:
