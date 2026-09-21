@@ -20,44 +20,76 @@ console.log('----------------------\n');
 
 const resend = new Resend(apiKey);
 
-// 配置带有浏览器伪装的 RSS 解析器，防止海外/国内源触发 403 拦截
+// 配置带有浏览器伪装的 RSS 解析器
 const parser = new Parser({
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+    'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'no-cache'
   },
-  timeout: 15000 // 设置 15 秒超时 limit
+  timeout: 15000
 });
 
-// 🌐 覆盖海内外 15 大 iOS 限免/折扣 RSS 监控源列表
+// 🌐 优化后的海内外 iOS 限免/折扣 RSS 监控源列表（使用稳定源与多节点备用）
 const RSS_SOURCES = [
-  // 1. 新增：AppRaven & Apple App of The Day 核心推荐源
-  { name: 'AppRaven Deals (iOS限免社区)', url: 'https://rsshub.app/appstore/price-drop/us/ios' },
-  { name: 'Apple App Store - App of The Day', url: 'https://rsshub.app/appstore/app-of-the-day/us' },
+  // 1. Reddit (使用 old.reddit.com 或带参数绕过 403)
+  { name: 'Reddit r/AppHookup', url: 'https://old.reddit.com/r/AppHookup/.rss' },
 
-  // 2. 国内核心 iOS 限免专业渠道
-  { name: 'IT之家 - iOS限免频道', url: 'https://rsshub.app/ithome/tag/41' },
-  { name: 'GoFans 正版软件限免', url: 'https://gofans.cn/feed' },
-  { name: '限免网 App 限免汇总', url: 'https://rsshub.app/appstore/price-drop/cn/ios' },
+  // 2. 国际 App 优惠折扣社区 (验证最新可用 feed 地址)
+  { name: 'AppSlice Free Feed', url: 'https://appslice.co/feed' },
+  { name: 'MacRumors iOS Deals', url: 'https://www.macrumors.com/macrumors.xml' },
+  { name: '9to5Mac Deals', url: 'https://9to5mac.com/feed/' },
+  { name: 'iDownloadBlog Deals', url: 'https://www.idownloadblog.com/feed/' },
+  { name: 'TouchArcade Sales', url: 'https://toucharcade.com/feed/' },
 
-  // 3. 海外核心限免与 App 折扣社区
-  { name: 'Reddit r/AppHookup', url: 'https://www.reddit.com/r/AppHookup/.rss' },
-  { name: 'AppSlice Free Feed', url: 'https://appslice.co/feed/free' },
-  { name: 'MacRumors iOS Deals', url: 'https://www.macrumors.com/cat/ios-apps/feed/' },
-  { name: '9to5Mac Deals', url: 'https://9to5mac.com/guides/deals/feed/' },
-  { name: 'iDownloadBlog Deals', url: 'https://www.idownloadblog.com/category/deals/feed/' },
-  { name: 'TouchArcade Sales', url: 'https://toucharcade.com/category/deals/feed/' },
-
-  // 4. 国内权威科技与综合社区
+  // 3. 国内科技与限免社区 (优先使用原生官方 Feed)
   { name: '小众软件', url: 'https://www.appinn.com/feed/' },
   { name: '异次元软件世界', url: 'https://feed.iplaysoft.com/' },
   { name: '少数派 综合频道', url: 'https://sspai.com/feed' },
-  { name: '威锋网 - Apple 资讯', url: 'https://www.feng.com/rss.xml' }
+  { name: '威锋网 - Apple 资讯', url: 'https://www.feng.com/rss.xml' },
+
+  // 4. 使用 RSSHub 节点转接的渠道 (带主/备节点自动重试机制)
+  { 
+    name: 'IT之家 - iOS限免', 
+    urls: [
+      'https://rsshub.rss3.io/ithome/tag/41',
+      'https://rss.shab.fun/ithome/tag/41'
+    ] 
+  },
+  { 
+    name: 'AppRaven Deals (iOS社区)', 
+    urls: [
+      'https://rsshub.rss3.io/appstore/price-drop/us/ios',
+      'https://rss.shab.fun/appstore/price-drop/us/ios'
+    ] 
+  },
+  { 
+    name: 'Apple App of The Day', 
+    urls: [
+      'https://rsshub.rss3.io/appstore/app-of-the-day/us',
+      'https://rss.shab.fun/appstore/app-of-the-day/us'
+    ] 
+  }
 ];
 
+async function fetchFeedWithFallback(source) {
+  const urls = source.urls || [source.url];
+  let lastError = null;
+
+  for (const url of urls) {
+    try {
+      const feed = await parser.parseURL(url);
+      return feed;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 async function fetchAllVPNDeals() {
-  console.log('🌐 开始扫描海内外 15 个 iOS 限免/折扣 RSS 订阅源...');
+  console.log(`🌐 开始扫描 ${RSS_SOURCES.length} 个海内外 iOS 限免/折扣 RSS 订阅源...`);
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
@@ -66,7 +98,7 @@ async function fetchAllVPNDeals() {
   for (const source of RSS_SOURCES) {
     try {
       console.log(`🔍 正在抓取: ${source.name}...`);
-      const feed = await parser.parseURL(source.url);
+      const feed = await fetchFeedWithFallback(source);
 
       const matchedItems = (feed.items || []).filter((item) => {
         const pubDate = new Date(item.pubDate || item.isoDate || Date.now());
@@ -75,7 +107,6 @@ async function fetchAllVPNDeals() {
         
         const isWithin3Days = pubDate >= threeDaysAgo;
         
-        // 针对 VPN、网络代理、加密协议及限免相关的全词库匹配
         const isVPNRelated = 
           title.includes('vpn') || 
           title.includes('proxy') || 
@@ -104,7 +135,7 @@ async function fetchAllVPNDeals() {
     }
   }
 
-  // 根据标题去重
+  // 去重
   const uniqueDeals = [];
   const seenTitles = new Set();
 
@@ -133,7 +164,7 @@ function buildHtmlBody(deals) {
   } else {
     dealsHtml = `
       <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8;">
-        <p style="margin: 0; color: #555;">海内外 15 大 iOS 限免市场扫描完成：近 3 天内未检索到原价付费 VPN / 网络代理工具的 100% 买断限免或重大折扣动态。</p>
+        <p style="margin: 0; color: #555;">全网扫描完成：近 3 天内未检索到原价付费 VPN / 网络代理工具的 100% 买断限免或重大折扣动态。</p>
       </div>
       <h4 style="margin-top: 20px;">💡 常用高品质/应急 VPN 备用方案：</h4>
       <ul>
@@ -147,7 +178,7 @@ function buildHtmlBody(deals) {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
       <h2 style="color: #333; border-bottom: 2px solid #0070f3; padding-bottom: 8px;">📱 iOS App Store 限免/优惠 VPN 全球日报</h2>
-      <p style="color: #666; font-size: 14px;">报告日期：${dateStr} (涵盖 AppRaven, App of The Day, Reddit, IT之家等 15 个渠道)</p>
+      <p style="color: #666; font-size: 14px;">报告日期：${dateStr}</p>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
       ${dealsHtml}
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
