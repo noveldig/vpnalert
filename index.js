@@ -1,11 +1,24 @@
 import Parser from 'rss-parser';
 import { Resend } from 'resend';
 
-// 从环境变量中读取 API Key
+// 从 GitHub Actions 环境变量读取密钥
 const apiKey = process.env.RESEND_API_KEY;
 
+// 🔍 环境变量与 Key 格式诊断打印
+console.log('--- 🔑 环境变量诊断 ---');
 if (!apiKey) {
-  console.error('❌ 错误: 未检测到 RESEND_API_KEY 环境变量，请检查环境变量设置。');
+  console.error('❌ 结果: RESEND_API_KEY 环境变量未定义 (undefined / empty)！请检查 GitHub Repo -> Settings -> Secrets 是否已配置。');
+} else {
+  const maskedKey = apiKey.length > 8 
+    ? `${apiKey.substring(0, 5)}***${apiKey.substring(apiKey.length - 4)}` 
+    : '***';
+  console.log(`✅ 读取到的 Key 长度: ${apiKey.length}`);
+  console.log(`✅ Key 的脱敏形式: ${maskedKey}`);
+  console.log(`✅ 前缀格式检查: ${apiKey.startsWith('re_') ? '正确 (以 re_ 开头)' : '❌ 异常 (未以 re_ 开头，请检查复制时是否夹带空格/引号)'}`);
+}
+console.log('----------------------\n');
+
+if (!apiKey) {
   process.exit(1);
 }
 
@@ -35,7 +48,7 @@ async function fetchVPNDeals() {
 
     return matchedItems;
   } catch (err) {
-    console.error('⚠️ 抓取 RSS 失败，生成保底策略内容:', err.message);
+    console.error('⚠️ 抓取 RSS 失败或超时，生成备用汇总模板:', err.message);
     return [];
   }
 }
@@ -84,7 +97,7 @@ async function main() {
   console.log('📧 正在调用 Resend 发送邮件...');
   
   const { data, error } = await resend.emails.send({
-    from: 'VPN Monitor <onboarding@resend.dev>', // Resend 测试域名
+    from: 'VPN Monitor <onboarding@resend.dev>',
     to: ['cai.shen@icloud.com'],
     subject: `[iOS App Store] VPN 限免/优惠每日日报 (${new Date().toLocaleDateString('zh-CN')})`,
     html: htmlContent,
