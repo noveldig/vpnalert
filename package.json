@@ -1,0 +1,14 @@
+{
+  "name": "vpnalert",
+  "version": "1.0.0",
+  "description": "iOS App Store VPN Deals Monitor with Resend Notification",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "rss-parser": "^3.13.0",
+    "resend": "^3.2.0"
+  }
+}
