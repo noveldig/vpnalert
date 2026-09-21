@@ -24,32 +24,58 @@ const resend = new Resend(apiKey);
 const parser = new Parser({
   headers: {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
     'Cache-Control': 'no-cache'
   },
   timeout: 15000
 });
 
-// 🌐 优化后的海内外 iOS 限免/折扣 RSS 监控源列表（使用稳定源与多节点备用）
+// 🌐 修正路径与带代理/镜像 fallback 的全网 RSS 监控源
 const RSS_SOURCES = [
-  // 1. Reddit (使用 old.reddit.com 或带参数绕过 403)
-  { name: 'Reddit r/AppHookup', url: 'https://old.reddit.com/r/AppHookup/.rss' },
+  // 1. Reddit (使用 old.reddit.com 及 RSS2JSON 转接绕过 403 拦截)
+  { 
+    name: 'Reddit r/AppHookup', 
+    urls: [
+      'https://old.reddit.com/r/AppHookup/.rss',
+      'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.reddit.com%2Fr%2FAppHookup%2F.rss'
+    ] 
+  },
 
-  // 2. 国际 App 优惠折扣社区 (验证最新可用 feed 地址)
-  { name: 'AppSlice Free Feed', url: 'https://appslice.co/feed' },
-  { name: 'MacRumors iOS Deals', url: 'https://www.macrumors.com/macrumors.xml' },
+  // 2. 海外 iOS 限免/折扣源 (修正路径)
+  { 
+    name: 'AppSlice Free Feed', 
+    urls: [
+      'https://appslice.co/feed',
+      'https://appslice.co/feed/deal'
+    ] 
+  },
+  { 
+    name: 'MacRumors iOS Deals', 
+    urls: [
+      'https://www.macrumors.com/macrumors.xml',
+      'https://www.macrumors.com/cat/ios-apps/feed/'
+    ] 
+  },
   { name: '9to5Mac Deals', url: 'https://9to5mac.com/feed/' },
   { name: 'iDownloadBlog Deals', url: 'https://www.idownloadblog.com/feed/' },
   { name: 'TouchArcade Sales', url: 'https://toucharcade.com/feed/' },
 
-  // 3. 国内科技与限免社区 (优先使用原生官方 Feed)
-  { name: '小众软件', url: 'https://www.appinn.com/feed/' },
-  { name: '异次元软件世界', url: 'https://feed.iplaysoft.com/' },
-  { name: '少数派 综合频道', url: 'https://sspai.com/feed' },
-  { name: '威锋网 - Apple 资讯', url: 'https://www.feng.com/rss.xml' },
-
-  // 4. 使用 RSSHub 节点转接的渠道 (带主/备节点自动重试机制)
+  // 3. 国内科技/限免社区 (修复 GoFans 与 限免网 路由)
+  { 
+    name: 'GoFans 正版软件限免', 
+    urls: [
+      'https://rsshub.rss3.io/gofans/latest',
+      'https://rss.shab.fun/gofans/latest'
+    ] 
+  },
+  { 
+    name: '限免网 App 限免汇总', 
+    urls: [
+      'https://rsshub.rss3.io/appstore/price-drop/cn/ios',
+      'https://rss.shab.fun/appstore/price-drop/cn/ios'
+    ] 
+  },
   { 
     name: 'IT之家 - iOS限免', 
     urls: [
@@ -57,20 +83,10 @@ const RSS_SOURCES = [
       'https://rss.shab.fun/ithome/tag/41'
     ] 
   },
-  { 
-    name: 'AppRaven Deals (iOS社区)', 
-    urls: [
-      'https://rsshub.rss3.io/appstore/price-drop/us/ios',
-      'https://rss.shab.fun/appstore/price-drop/us/ios'
-    ] 
-  },
-  { 
-    name: 'Apple App of The Day', 
-    urls: [
-      'https://rsshub.rss3.io/appstore/app-of-the-day/us',
-      'https://rss.shab.fun/appstore/app-of-the-day/us'
-    ] 
-  }
+  { name: '小众软件', url: 'https://www.appinn.com/feed/' },
+  { name: '异次元软件世界', url: 'https://feed.iplaysoft.com/' },
+  { name: '少数派 综合频道', url: 'https://sspai.com/feed' },
+  { name: '威锋网 - Apple 资讯', url: 'https://www.feng.com/rss.xml' }
 ];
 
 async function fetchFeedWithFallback(source) {
@@ -79,6 +95,21 @@ async function fetchFeedWithFallback(source) {
 
   for (const url of urls) {
     try {
+      // 针对 JSON API 接口处理 (如 rss2json)
+      if (url.includes('rss2json.com')) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return {
+          items: (data.items || []).map(item => ({
+            title: item.title,
+            link: item.link,
+            pubDate: item.pubDate,
+            contentSnippet: item.description
+          }))
+        };
+      }
+
       const feed = await parser.parseURL(url);
       return feed;
     } catch (err) {
