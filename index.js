@@ -20,33 +20,44 @@ console.log('----------------------\n');
 
 const resend = new Resend(apiKey);
 
-// 配置带有浏览器伪装的 RSS 解析器，防止被 403 拦截
+// 配置带有浏览器伪装的 RSS 解析器，防止海外/国内源触发 403 拦截
 const parser = new Parser({
   headers: {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7'
+    'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
   },
-  timeout: 15000 // 针对国外源延长至 15 秒超时 limit
+  timeout: 15000 // 设置 15 秒超时 limit
 });
 
-// 🌐 修复且高可靠的 8 大 iOS 限免/折扣 RSS 监控源列表
+// 🌐 覆盖海内外 15 大 iOS 限免/折扣 RSS 监控源列表
 const RSS_SOURCES = [
-  // 1. 国际主流限免/折扣社区
+  // 1. 新增：AppRaven & Apple App of The Day 核心推荐源
+  { name: 'AppRaven Deals (iOS限免社区)', url: 'https://rsshub.app/appstore/price-drop/us/ios' },
+  { name: 'Apple App Store - App of The Day', url: 'https://rsshub.app/appstore/app-of-the-day/us' },
+
+  // 2. 国内核心 iOS 限免专业渠道
+  { name: 'IT之家 - iOS限免频道', url: 'https://rsshub.app/ithome/tag/41' },
+  { name: 'GoFans 正版软件限免', url: 'https://gofans.cn/feed' },
+  { name: '限免网 App 限免汇总', url: 'https://rsshub.app/appstore/price-drop/cn/ios' },
+
+  // 3. 海外核心限免与 App 折扣社区
   { name: 'Reddit r/AppHookup', url: 'https://www.reddit.com/r/AppHookup/.rss' },
   { name: 'AppSlice Free Feed', url: 'https://appslice.co/feed/free' },
-  { name: 'iDownloadBlog Deals', url: 'https://www.idownloadblog.com/category/deals/feed/' },
   { name: 'MacRumors iOS Deals', url: 'https://www.macrumors.com/cat/ios-apps/feed/' },
-  
-  // 2. 国内权威科技与限免社区
-  { name: '小众软件 (最新 Feed)', url: 'https://www.appinn.com/feed/' },
+  { name: '9to5Mac Deals', url: 'https://9to5mac.com/guides/deals/feed/' },
+  { name: 'iDownloadBlog Deals', url: 'https://www.idownloadblog.com/category/deals/feed/' },
+  { name: 'TouchArcade Sales', url: 'https://toucharcade.com/category/deals/feed/' },
+
+  // 4. 国内权威科技与综合社区
+  { name: '小众软件', url: 'https://www.appinn.com/feed/' },
   { name: '异次元软件世界', url: 'https://feed.iplaysoft.com/' },
   { name: '少数派 综合频道', url: 'https://sspai.com/feed' },
   { name: '威锋网 - Apple 资讯', url: 'https://www.feng.com/rss.xml' }
 ];
 
 async function fetchAllVPNDeals() {
-  console.log('🌐 开始全网扫描 8 个 iOS 限免/折扣 RSS 订阅源...');
+  console.log('🌐 开始扫描海内外 15 个 iOS 限免/折扣 RSS 订阅源...');
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
@@ -64,7 +75,7 @@ async function fetchAllVPNDeals() {
         
         const isWithin3Days = pubDate >= threeDaysAgo;
         
-        // 针对 VPN、网络代理、加密协议及限免相关的关键词匹配
+        // 针对 VPN、网络代理、加密协议及限免相关的全词库匹配
         const isVPNRelated = 
           title.includes('vpn') || 
           title.includes('proxy') || 
@@ -75,6 +86,7 @@ async function fetchAllVPNDeals() {
           title.includes('quantumult') ||
           title.includes('shadowrocket') ||
           content.includes('vpn') ||
+          content.includes('网络加速') ||
           content.includes('加速器');
 
         return isWithin3Days && isVPNRelated;
@@ -121,7 +133,7 @@ function buildHtmlBody(deals) {
   } else {
     dealsHtml = `
       <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8;">
-        <p style="margin: 0; color: #555;">全网 8 大渠道扫描完成：近 3 天内未检索到原价付费 VPN / 网络代理工具的 100% 买断限免或重大折扣动态。</p>
+        <p style="margin: 0; color: #555;">海内外 15 大 iOS 限免市场扫描完成：近 3 天内未检索到原价付费 VPN / 网络代理工具的 100% 买断限免或重大折扣动态。</p>
       </div>
       <h4 style="margin-top: 20px;">💡 常用高品质/应急 VPN 备用方案：</h4>
       <ul>
@@ -134,8 +146,8 @@ function buildHtmlBody(deals) {
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
-      <h2 style="color: #333; border-bottom: 2px solid #0070f3; padding-bottom: 8px;">📱 iOS App Store 限免/优惠 VPN 全网日报</h2>
-      <p style="color: #666; font-size: 14px;">报告日期：${dateStr} (涵盖 Reddit, AppSlice, 异次元, 小众软件等 8 个全网渠道)</p>
+      <h2 style="color: #333; border-bottom: 2px solid #0070f3; padding-bottom: 8px;">📱 iOS App Store 限免/优惠 VPN 全球日报</h2>
+      <p style="color: #666; font-size: 14px;">报告日期：${dateStr} (涵盖 AppRaven, App of The Day, Reddit, IT之家等 15 个渠道)</p>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
       ${dealsHtml}
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
@@ -148,12 +160,12 @@ async function main() {
   const deals = await fetchAllVPNDeals();
   const htmlContent = buildHtmlBody(deals);
 
-  console.log('\n📧 正在调用 Resend 发送全网日报邮件...');
+  console.log('\n📧 正在调用 Resend 发送全球日报邮件...');
   
   const { data, error } = await resend.emails.send({
     from: 'VPN Monitor <onboarding@resend.dev>',
     to: ['cai.shen@icloud.com'],
-    subject: `[iOS App Store] 全网 VPN 限免/优惠日报 (${new Date().toLocaleDateString('zh-CN')})`,
+    subject: `[iOS App Store] 全球 VPN 限免/优惠日报 (${new Date().toLocaleDateString('zh-CN')})`,
     html: htmlContent,
   });
 
